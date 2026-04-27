@@ -508,37 +508,82 @@ async function resolveGoogleFontURL(name) {
 }
 
 /* ─── Carica font → stringa @font-face base64 ── */
-// Shadows Into Light: caricato dal TTF locale (identico alla preview)
-// Tutti gli altri: risolti dinamicamente da Google Fonts API
+// Per 'Shadows Into Light': estrae il font già caricato dal browser (FontFace API)
+// → zero fetch, zero path problems, zero file:// issues.
+// Per gli altri: li risolve da Google Fonts API come prima.
 async function loadFontAsBase64(name) {
-  let url, fmt;
-
   if (name === 'Shadows Into Light') {
-    url = 'img/ShadowsIntoLight-Regular.ttf';
-    fmt = 'truetype';
-  } else {
-    try {
-      url = await resolveGoogleFontURL(name);
-    } catch(e) {
-      console.warn(`resolveGoogleFontURL fallito per "${name}":`, e);
-      return `@font-face { font-family: '${name}'; src: local('${name}'); }\n`;
-    }
-    fmt = url.endsWith('.ttf') ? 'truetype' : 'woff2';
+    return await extractLoadedFontAsBase64(name);
   }
 
-  const resp = await fetch(url);
-  if (!resp.ok) throw new Error(`fetch fallito per "${name}" (${url}): HTTP ${resp.status}`);
+  // Google Fonts
+  let url;
+  try {
+    url = await resolveGoogleFontURL(name);
+  } catch(e) {
+    console.warn(`resolveGoogleFontURL fallito per "${name}":`, e);
+    return `@font-face { font-family: '${name}'; src: local('${name}'); }\n`;
+  }
+  const fmt = url.endsWith('.ttf') ? 'truetype' : 'woff2';
+  try {
+    const resp = await fetch(url);
+    if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+    const buf = await resp.arrayBuffer();
+    if (buf.byteLength === 0) throw new Error('vuoto');
+    const bytes = new Uint8Array(buf);
+    let bin = '';
+    const chunk = 8192;
+    for (let i = 0; i < bytes.length; i += chunk)
+      bin += String.fromCharCode(...bytes.subarray(i, i + chunk));
+    const b64 = btoa(bin);
+    return `@font-face { font-family: '${name}'; font-style: normal; font-weight: 400; src: url('data:font/${fmt};base64,${b64}') format('${fmt}'); }\n`;
+  } catch(e) {
+    console.warn(`Font Google fallback per "${name}":`, e);
+    return `@font-face { font-family: '${name}'; src: local('${name}'); }\n`;
+  }
+}
+
+/* ─── Estrae il font già caricato dal browser usando FontFace API ── */
+// Legge il src dal @font-face del CSS, crea un FontFace object,
+// lo carica (browser usa cache → zero rete) e legge i byte via fetch in cache.
+async function extractLoadedFontAsBase64(name) {
+  // Cerca il @font-face dichiarato nel CSS del documento
+  let fontUrl = null;
+  for (const sheet of document.styleSheets) {
+    try {
+      for (const rule of sheet.cssRules) {
+        if (rule instanceof CSSFontFaceRule) {
+          const family = rule.style.getPropertyValue('font-family').replace(/['"]/g, '').trim();
+          if (family === name) {
+            const src = rule.style.getPropertyValue('src');
+            const m = src.match(/url\(['"]?([^'")\s]+)['"]?\)/);
+            if (m) { fontUrl = m[1]; break; }
+          }
+        }
+      }
+    } catch(_) {}
+    if (fontUrl) break;
+  }
+
+  if (!fontUrl) throw new Error(`@font-face src non trovato per "${name}"`);
+
+  // Forza il caricamento tramite FontFace API (usa cache del browser)
+  const ff = new FontFace(name, `url('${fontUrl}')`);
+  await ff.load();
+
+  // Fetch — il browser serve dalla cache, non tocca il disco/rete
+  const resp = await fetch(fontUrl);
+  if (!resp.ok) throw new Error(`fetch font fallito: HTTP ${resp.status}`);
   const buf = await resp.arrayBuffer();
-  if (buf.byteLength === 0) throw new Error(`Font vuoto per "${name}"`);
+  if (buf.byteLength === 0) throw new Error('Font vuoto dal fetch');
 
   const bytes = new Uint8Array(buf);
   let bin = '';
   const chunk = 8192;
-  for (let i = 0; i < bytes.length; i += chunk) {
+  for (let i = 0; i < bytes.length; i += chunk)
     bin += String.fromCharCode(...bytes.subarray(i, i + chunk));
-  }
   const b64 = btoa(bin);
-  return `@font-face { font-family: '${name}'; font-style: normal; font-weight: 400; src: url('data:font/${fmt};base64,${b64}') format('${fmt}'); }\n`;
+  return `@font-face { font-family: '${name}'; font-style: normal; font-weight: 400; src: url('data:font/truetype;base64,${b64}') format('truetype'); }\n`;
 }
 
 /* ─── GIF ANIMATA – cattura DOM reale con font inline ──────── */
