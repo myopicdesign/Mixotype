@@ -601,25 +601,19 @@ async function exportGIF() {
     }
     inlineStyles(node, clone);
 
-    // Raccoglie CSS della pagina — esclude i @font-face con src locale/relativo
-    // perché nel SVG foreignObject i path relativi non vengono risolti.
-    // I @font-face base64 in inlineFontsCSS sostituiscono quelli originali.
     const styleSheets = Array.from(document.styleSheets);
     let cssText = '';
     styleSheets.forEach(ss => {
       try {
-        Array.from(ss.cssRules || []).forEach(r => {
-          // Salta @font-face che non hanno src data: (cioè quelli con path relativi/locali)
-          if (r.type === CSSRule.FONT_FACE_RULE) {
-            const src = r.style.getPropertyValue('src') || '';
-            if (!src.includes('data:') && !src.includes('fonts.gstatic.com')) return;
-          }
-          cssText += r.cssText + '\n';
-        });
+        Array.from(ss.cssRules || []).forEach(r => { cssText += r.cssText + '\n'; });
       } catch(_) {}
     });
 
+    // Antepone i @font-face base64 — vengono prima del @font-face con path relativo
+    // quindi il browser usa quelli (primo match vince per @font-face con stesso nome)
     cssText = inlineFontsCSS + cssText;
+    // Forza il font base su tutti gli elementi del clone
+    cssText += "\n* { font-family: 'Shadows Into Light', cursive !important; }\n";
 
     const styleEl = document.createElement('style');
     styleEl.textContent = cssText;
