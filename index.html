@@ -507,86 +507,71 @@ async function resolveGoogleFontURL(name) {
   return match[1];
 }
 
-/* ─── Carica font → stringa @font-face base64 ── */
-// Per 'Shadows Into Light': estrae il font già caricato dal browser (FontFace API)
-// → zero fetch, zero path problems, zero file:// issues.
-// Per gli altri: li risolve da Google Fonts API come prima.
-async function loadFontAsBase64(name) {
-  if (name === 'Shadows Into Light') {
-    return await extractLoadedFontAsBase64(name);
-  }
+/* ─── Carica font come FontFace nel documento ───────────────── */
+// Strategia definitiva: carichiamo ogni font come oggetto FontFace
+// e lo aggiungiamo a document.fonts. Il canvas 2D vede tutti i font
+// in document.fonts senza bisogno di SVG foreignObject o path relativi.
+// Per Shadows Into Light: lo leggiamo dai bytes del CSSFontFaceRule già parsato.
+// Per Google Fonts: fetch diretto dell'URL woff2 da gstatic.
 
-  // Google Fonts
-  let url;
-  try {
-    url = await resolveGoogleFontURL(name);
-  } catch(e) {
-    console.warn(`resolveGoogleFontURL fallito per "${name}":`, e);
-    return `@font-face { font-family: '${name}'; src: local('${name}'); }\n`;
-  }
-  const fmt = url.endsWith('.ttf') ? 'truetype' : 'woff2';
-  try {
-    const resp = await fetch(url);
-    if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
-    const buf = await resp.arrayBuffer();
-    if (buf.byteLength === 0) throw new Error('vuoto');
-    const bytes = new Uint8Array(buf);
-    let bin = '';
-    const chunk = 8192;
-    for (let i = 0; i < bytes.length; i += chunk)
-      bin += String.fromCharCode(...bytes.subarray(i, i + chunk));
-    const b64 = btoa(bin);
-    return `@font-face { font-family: '${name}'; font-style: normal; font-weight: 400; src: url('data:font/${fmt};base64,${b64}') format('${fmt}'); }\n`;
-  } catch(e) {
-    console.warn(`Font Google fallback per "${name}":`, e);
-    return `@font-face { font-family: '${name}'; src: local('${name}'); }\n`;
-  }
-}
+async function loadAllFontsIntoDocument() {
+  const loaded = [];
 
-/* ─── Estrae il font già caricato dal browser usando FontFace API ── */
-// Legge il src dal @font-face del CSS, crea un FontFace object,
-// lo carica (browser usa cache → zero rete) e legge i byte via fetch in cache.
-async function extractLoadedFontAsBase64(name) {
-  // Cerca il @font-face dichiarato nel CSS del documento
-  let fontUrl = null;
-  for (const sheet of document.styleSheets) {
+  for (const name of FONT_EXPORT_NAMES) {
     try {
-      for (const rule of sheet.cssRules) {
-        if (rule instanceof CSSFontFaceRule) {
-          const family = rule.style.getPropertyValue('font-family').replace(/['"]/g, '').trim();
-          if (family === name) {
-            const src = rule.style.getPropertyValue('src');
-            const m = src.match(/url\(['"]?([^'")\s]+)['"]?\)/);
-            if (m) { fontUrl = m[1]; break; }
-          }
+      // Controlla se è già caricato
+      const already = [...document.fonts].find(f =>
+        f.family.replace(/['"]/g, '') === name && f.status === 'loaded'
+      );
+      if (already) { loaded.push({ name, face: already }); continue; }
+
+      let face;
+      if (name === 'Shadows Into Light') {
+        // Leggi i bytes direttamente dal CSSFontFaceRule (già parsato, nessun fetch)
+        let srcUrl = null;
+        for (const sheet of document.styleSheets) {
+          try {
+            for (const rule of sheet.cssRules) {
+              if (rule instanceof CSSFontFaceRule) {
+                const fam = rule.style.getPropertyValue('font-family').replace(/['"]/g,'').trim();
+                if (fam === name) {
+                  const src = rule.style.getPropertyValue('src');
+                  const m = src.match(/url\(['"]?([^'")\s]+)['"]?\)/);
+                  if (m) { srcUrl = m[1]; break; }
+                }
+              }
+            }
+          } catch(_) {}
+          if (srcUrl) break;
         }
+        if (!srcUrl) throw new Error('src non trovato nel CSS');
+        // fetch con cache-first — il browser ha già questo file in memoria
+        const resp = await fetch(srcUrl, { cache: 'force-cache' });
+        if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+        const buf = await resp.arrayBuffer();
+        face = new FontFace(name, buf, { style: 'normal', weight: '400' });
+      } else {
+        // Google Fonts: risolvi URL woff2
+        const url = await resolveGoogleFontURL(name);
+        const resp = await fetch(url);
+        if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+        const buf = await resp.arrayBuffer();
+        face = new FontFace(name, buf, { style: 'normal', weight: '400' });
       }
-    } catch(_) {}
-    if (fontUrl) break;
+
+      await face.load();
+      document.fonts.add(face);
+      loaded.push({ name, face });
+    } catch(e) {
+      console.warn(`Font "${name}" non caricato:`, e);
+    }
   }
 
-  if (!fontUrl) throw new Error(`@font-face src non trovato per "${name}"`);
-
-  // Forza il caricamento tramite FontFace API (usa cache del browser)
-  const ff = new FontFace(name, `url('${fontUrl}')`);
-  await ff.load();
-
-  // Fetch — il browser serve dalla cache, non tocca il disco/rete
-  const resp = await fetch(fontUrl);
-  if (!resp.ok) throw new Error(`fetch font fallito: HTTP ${resp.status}`);
-  const buf = await resp.arrayBuffer();
-  if (buf.byteLength === 0) throw new Error('Font vuoto dal fetch');
-
-  const bytes = new Uint8Array(buf);
-  let bin = '';
-  const chunk = 8192;
-  for (let i = 0; i < bytes.length; i += chunk)
-    bin += String.fromCharCode(...bytes.subarray(i, i + chunk));
-  const b64 = btoa(bin);
-  return `@font-face { font-family: '${name}'; font-style: normal; font-weight: 400; src: url('data:font/truetype;base64,${b64}') format('truetype'); }\n`;
+  await document.fonts.ready;
+  return loaded;
 }
 
-/* ─── GIF ANIMATA – cattura DOM reale con font inline ──────── */
+/* ─── GIF ANIMATA – disegno canvas diretto ──────────────────── */
 async function exportGIF() {
   const GIF_W   = 1000;
   const GIF_H   = 400;
@@ -595,24 +580,21 @@ async function exportGIF() {
 
   const totalFrames  = GIF_FPS * GIF_DUR;
   const frameDelayCs = Math.round(100 / GIF_FPS);
-  const frameDurMs   = 1000 / GIF_FPS;
 
   const staticSpan = previewText.querySelector('.sm-static');
-  const prevWrapBg = previewWrap.style.background;
 
   // Ferma il RAF live
   if (stopmoRaf) { cancelAnimationFrame(stopmoRaf); stopmoRaf = null; }
 
-  // ── Carica tutti i font da Google Fonts in base64 ──────────
+  // ── Carica tutti i font nel documento ──────────────────────
   exportStatus.textContent = 'Caricamento font...';
   await new Promise(r => setTimeout(r, 0));
-  let inlineFontsCSS = '';
   for (let i = 0; i < FONT_EXPORT_NAMES.length; i++) {
     const name = FONT_EXPORT_NAMES[i];
-    exportStatus.textContent = `Font ${i + 1}/${FONT_EXPORT_NAMES.length}: ${name}...`;
+    exportStatus.textContent = `Font ${i+1}/${FONT_EXPORT_NAMES.length}: ${name}...`;
     await new Promise(r => setTimeout(r, 0));
-    inlineFontsCSS += await loadFontAsBase64(name);
   }
+  await loadAllFontsIntoDocument();
 
   // ── Canvas di rendering ─────────────────────────────────────
   const gifCanvas = document.createElement('canvas');
@@ -620,90 +602,48 @@ async function exportGIF() {
   gifCanvas.height = GIF_H;
   const gifCtx = gifCanvas.getContext('2d', { willReadFrequently: true });
 
-  const pw    = previewWrap.offsetWidth;
-  const ph    = previewWrap.offsetHeight;
+  // Leggi dimensioni e stile reali dal DOM
+  const pw = previewWrap.offsetWidth;
+  const ph = previewWrap.offsetHeight;
   const scale = GIF_W / pw;
 
-  previewWrap.style.background = 'transparent';
+  // Leggi font-size reale dal computed style del previewText
+  const computedFS = parseFloat(window.getComputedStyle(previewText).fontSize); // px
+  const exportFS   = Math.round(computedFS * scale);
 
-  // ── Serializza DOM → SVG foreignObject con font inline ──────
-  function serializeNodeToDataURL(node, w, h) {
-    const clone = node.cloneNode(true);
+  // Leggi colore corrente
+  const textColor = currentColor;
 
-    function inlineStyles(src, dst) {
-      const cs = window.getComputedStyle(src);
-      const props = [
-        'font-family','font-size','font-weight','font-style',
-        'color','text-align','line-height','white-space',
-        'position','top','left','width','height','transform',
-        'display','flex-direction','justify-content','align-items',
-        'flex-wrap','filter','user-select','overflow','box-sizing','letter-spacing',
-      ];
-      props.forEach(p => {
-        try { dst.style[p] = cs.getPropertyValue(p); } catch(_) {}
-      });
-      const srcCh = src.children;
-      const dstCh = dst.children;
-      for (let i = 0; i < srcCh.length; i++) {
-        if (dstCh[i]) inlineStyles(srcCh[i], dstCh[i]);
-      }
-    }
-    inlineStyles(node, clone);
+  // ── Disegna un frame sul canvas ─────────────────────────────
+  function drawFrame(fontStates) {
+    gifCtx.clearRect(0, 0, GIF_W, GIF_H);
+    // sfondo trasparente (già clearRect)
 
-    const styleSheets = Array.from(document.styleSheets);
-    let cssText = '';
-    styleSheets.forEach(ss => {
-      try {
-        Array.from(ss.cssRules || []).forEach(r => { cssText += r.cssText + '\n'; });
-      } catch(_) {}
+    // Ogni lettera con il suo font
+    const letters = currentText.split('');
+    if (letters.length === 0) return;
+
+    // Misura la larghezza totale per centrare
+    // Prima passa: misura tutto con i font assegnati
+    const metrics = letters.map((ch, idx) => {
+      const fontName = fontStates[idx] || 'Shadows Into Light';
+      gifCtx.font = `400 ${exportFS}px '${fontName}', cursive`;
+      return { ch, fontName, width: gifCtx.measureText(ch).width };
     });
 
-    // Antepone i @font-face base64 — vengono prima del @font-face con path relativo
-    // quindi il browser usa quelli (primo match vince per @font-face con stesso nome)
-    cssText = inlineFontsCSS + cssText;
-    // Forza il font base su tutti gli elementi del clone
-    cssText += "\n*:not(.sm-letter) { font-family: 'Shadows Into Light', cursive !important; }\n";
+    const totalWidth = metrics.reduce((s, m) => s + m.width, 0);
+    let x = (GIF_W - totalWidth) / 2;
+    const y = GIF_H / 2 + exportFS * 0.35; // baseline approssimativa
 
-    const styleEl = document.createElement('style');
-    styleEl.textContent = cssText;
-
-    const wrapper = document.createElement('div');
-    wrapper.style.width    = w + 'px';
-    wrapper.style.height   = h + 'px';
-    wrapper.style.overflow = 'hidden';
-    wrapper.appendChild(styleEl);
-    wrapper.appendChild(clone);
-
-    const xml    = new XMLSerializer().serializeToString(wrapper);
-    const svgSrc = `<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${h}">
-      <foreignObject width="100%" height="100%">
-        <html xmlns="http://www.w3.org/1999/xhtml">${xml}</html>
-      </foreignObject>
-    </svg>`;
-    return 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svgSrc);
-  }
-
-  function captureFrame() {
-    return new Promise((resolve) => {
-      const dataURL = serializeNodeToDataURL(previewWrap, pw, ph);
-      const img = new Image();
-      img.onload = () => {
-        gifCtx.clearRect(0, 0, GIF_W, GIF_H);
-        const drawH = ph * scale;
-        const drawY = Math.round((GIF_H - drawH) / 2);
-        gifCtx.drawImage(img, 0, drawY, GIF_W, drawH);
-        resolve(gifCtx.getImageData(0, 0, GIF_W, GIF_H));
-      };
-      img.onerror = () => {
-        gifCtx.clearRect(0, 0, GIF_W, GIF_H);
-        resolve(gifCtx.getImageData(0, 0, GIF_W, GIF_H));
-      };
-      img.src = dataURL;
+    gifCtx.fillStyle = textColor;
+    metrics.forEach(({ ch, fontName, width }) => {
+      gifCtx.font = `400 ${exportFS}px '${fontName}', cursive`;
+      gifCtx.fillText(ch, x, y);
+      x += width;
     });
   }
 
-  // ── Pre-calcola stati font per ogni frame (determinismo stop motion) ──
-  // Simula la stessa logica rAF del live così l'export corrisponde all'anteprima
+  // ── Pre-calcola stati font per ogni frame ───────────────────
   const stopmoStates = [];
   {
     const letters  = currentText.split('');
@@ -734,30 +674,15 @@ async function exportGIF() {
   await new Promise(r => setTimeout(r, 0));
 
   const frames = [];
-
   for (let i = 0; i < totalFrames; i++) {
-    // Applica lo stato font calcolato a ogni .sm-letter nel DOM reale
-    const letterSpans = staticSpan.querySelectorAll('.sm-letter');
-    const state = stopmoStates[i];
-    letterSpans.forEach((s, idx) => {
-      if (state[idx]) {
-        s.style.fontFamily     = `'${state[idx]}', cursive`;
-        s.dataset.currentFont  = state[idx];
-      }
-    });
-
-    // Forza reflow + doppio rAF per garantire paint aggiornato
-    previewWrap.getBoundingClientRect();
-    await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));
-
-    frames.push(await captureFrame());
-
+    drawFrame(stopmoStates[i]);
+    frames.push(gifCtx.getImageData(0, 0, GIF_W, GIF_H));
     progressBar.style.width = ((i / totalFrames) * 55).toFixed(1) + '%';
     exportStatus.textContent = `Cattura frame ${i + 1}/${totalFrames}...`;
+    await new Promise(r => setTimeout(r, 0));
   }
 
-  // Ripristina
-  previewWrap.style.background = prevWrapBg;
+  // Ripristina animazione live
   startStopmo(currentIntensity);
 
   exportStatus.textContent = 'Costruzione palette...';
