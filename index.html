@@ -514,7 +514,9 @@ async function loadFontAsBase64(name) {
   try {
     let url, fmt;
     if (name === 'Shadows Into Light') {
-      url = 'img/ShadowsIntoLight-Regular.ttf';
+      // Usa un URL assoluto basato sulla posizione del documento
+      const base = window.location.href.replace(/\/[^\/]*$/, '/');
+      url = base + 'img/ShadowsIntoLight-Regular.ttf';
       fmt = 'truetype';
     } else {
       url = await resolveGoogleFontURL(name);
@@ -523,6 +525,7 @@ async function loadFontAsBase64(name) {
     const resp = await fetch(url);
     if (!resp.ok) throw new Error(`fetch fallito per "${name}": ${resp.status}`);
     const buf   = await resp.arrayBuffer();
+    if (buf.byteLength === 0) throw new Error(`TTF vuoto per "${name}"`);
     const bytes = new Uint8Array(buf);
     let bin = '';
     const chunk = 8192;
