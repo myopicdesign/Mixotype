@@ -10,7 +10,7 @@
 <style>
 @font-face {
   font-family: 'ShadowsIntoLight';
-  src: url('ShadowsIntoLight-Regular.ttf') format('truetype');
+  src: url('img/ShadowsIntoLight-Regular.ttf') format('truetype');
   font-weight: normal;
   font-style: normal;
 }
@@ -74,7 +74,7 @@ body > * { position: relative; z-index: 1; }
 }
 
 #preview-text {
-  font-family: 'Shadows Into Light', cursive;
+  font-family: 'ShadowsIntoLight', 'Shadows Into Light', cursive;
   font-weight: 400;
   font-size: 5rem;
   color: var(--ink);
@@ -116,7 +116,7 @@ body > * { position: relative; z-index: 1; }
 
 #text-input {
   flex: 1;
-  font-family: 'Shadows Into Light', cursive;
+  font-family: 'ShadowsIntoLight', 'Shadows Into Light', cursive;
   font-weight: 400;
   font-size: 1.8rem;
   background: var(--paper);
@@ -353,16 +353,15 @@ let currentIntensity = 1;
 let currentFontSize  = 5;
 let currentText      = 'Titolo';
 
-// Font usati nello stop motion
+// Font usati nello stop motion — 'ShadowsIntoLight' è il TTF locale (font di default)
 const STOPMO_FONTS = [
-  'Shadows Into Light','Caveat','Covered By Your Grace','Gochi Hand',
+  'ShadowsIntoLight','Caveat','Covered By Your Grace','Gochi Hand',
   'Indie Flower','Just Another Hand','Kalam','Patrick Hand','Permanent Marker','Rock Salt',
 ];
 
-// Nomi dei font usati nell'export — gli URL woff2 vengono risolti dinamicamente
-// chiamando la Google Fonts CSS API, così sono sempre aggiornati.
+// Per l'export: ShadowsIntoLight viene caricato dal TTF locale, gli altri da Google Fonts API
 const FONT_EXPORT_NAMES = [
-  'Shadows Into Light','Caveat','Covered By Your Grace','Gochi Hand',
+  'ShadowsIntoLight','Caveat','Covered By Your Grace','Gochi Hand',
   'Indie Flower','Just Another Hand','Kalam','Patrick Hand','Permanent Marker','Rock Salt',
 ];
 
@@ -382,8 +381,8 @@ function buildLetterSpans(text) {
     const s = document.createElement('span');
     s.className = 'sm-letter';
     s.textContent = ch;
-    s.dataset.currentFont = 'Shadows Into Light';
-    s.style.fontFamily = "'Shadows Into Light', cursive";
+    s.dataset.currentFont = 'ShadowsIntoLight';
+    s.style.fontFamily = "'ShadowsIntoLight', 'Shadows Into Light', cursive";
     staticSpan.appendChild(s);
   });
 }
@@ -412,8 +411,8 @@ function stopStopmo() {
   if (stopmoRaf) { cancelAnimationFrame(stopmoRaf); stopmoRaf = null; }
   const staticSpan = previewText.querySelector('.sm-static');
   staticSpan.querySelectorAll('.sm-letter').forEach(ltr => {
-    ltr.style.fontFamily = "'Shadows Into Light', cursive";
-    ltr.dataset.currentFont = 'Shadows Into Light';
+    ltr.style.fontFamily = "'ShadowsIntoLight', 'Shadows Into Light', cursive";
+    ltr.dataset.currentFont = 'ShadowsIntoLight';
   });
 }
 
@@ -509,21 +508,28 @@ async function resolveGoogleFontURL(name) {
 }
 
 /* ─── Carica font da Google Fonts (URL dinamico) → stringa @font-face base64 ── */
+// Eccezione: 'ShadowsIntoLight' viene caricato dal TTF locale in img/
 async function loadFontAsBase64(name) {
   try {
-    const url  = await resolveGoogleFontURL(name);
+    let url, fmt;
+    if (name === 'ShadowsIntoLight') {
+      // Carica il TTF locale — stesso file usato nella preview
+      url = 'img/ShadowsIntoLight-Regular.ttf';
+      fmt = 'truetype';
+    } else {
+      url = await resolveGoogleFontURL(name);
+      fmt = url.endsWith('.ttf') ? 'truetype' : 'woff2';
+    }
     const resp = await fetch(url);
-    if (!resp.ok) throw new Error(`fetch woff2 fallito per "${name}": ${resp.status}`);
+    if (!resp.ok) throw new Error(`fetch fallito per "${name}": ${resp.status}`);
     const buf   = await resp.arrayBuffer();
     const bytes = new Uint8Array(buf);
-    // Conversione ArrayBuffer → base64 senza stringa concatenata (più veloce)
     let bin = '';
     const chunk = 8192;
     for (let i = 0; i < bytes.length; i += chunk) {
       bin += String.fromCharCode(...bytes.subarray(i, i + chunk));
     }
     const b64 = btoa(bin);
-    const fmt  = url.endsWith('.ttf') ? 'truetype' : 'woff2';
     return `@font-face { font-family: '${name}'; font-style: normal; font-weight: 400; src: url('data:font/${fmt};base64,${b64}') format('${fmt}'); }\n`;
   } catch(e) {
     console.warn('Font load fallback per', name, e);
@@ -656,7 +662,7 @@ async function exportGIF() {
   const stopmoStates = [];
   {
     const letters  = currentText.split('');
-    let fontState  = letters.map(() => 'Shadows Into Light');
+    let fontState  = letters.map(() => 'ShadowsIntoLight');
     let localFrame = 0;
     for (let i = 0; i < totalFrames; i++) {
       const rafThisFrame = Math.round((i + 1) * 1000 / GIF_FPS / (1000 / 60))
