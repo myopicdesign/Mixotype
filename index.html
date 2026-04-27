@@ -632,13 +632,9 @@ async function exportGIF() {
       } catch(_) {}
     });
 
-    // *** FONT FIX: antepone @font-face base64 + forza font base sul wrapper ***
-    // I font-family inline su ogni .sm-letter sovrascrivono il !important del wrapper
-    // perché hanno specificità più alta (style inline > regola CSS).
     const localFontFace = inlineFontFace || "@font-face { font-family: 'Shadows Into Light'; src: local('Shadows Into Light'); }\n";
     cssText = localFontFace + inlineGFontsCSS + cssText;
-    // Forza il font base su tutto il clone; le .sm-letter lo sovrascrivono con style inline
-    cssText += "\n#preview-text, #preview-text .sm-static { font-family: 'Shadows Into Light', cursive !important; }\n";
+    cssText += "\n* { font-family: 'Shadows Into Light', cursive !important; }\n";
 
     const styleEl = document.createElement('style');
     styleEl.textContent = cssText;
