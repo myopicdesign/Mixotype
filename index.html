@@ -613,7 +613,7 @@ async function exportGIF() {
     // quindi il browser usa quelli (primo match vince per @font-face con stesso nome)
     cssText = inlineFontsCSS + cssText;
     // Forza il font base su tutti gli elementi del clone
-    cssText += "\n* { font-family: 'Shadows Into Light', cursive !important; }\n";
+    cssText += "\n*:not(.sm-letter) { font-family: 'Shadows Into Light', cursive !important; }\n";
 
     const styleEl = document.createElement('style');
     styleEl.textContent = cssText;
