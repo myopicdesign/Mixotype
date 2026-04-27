@@ -508,18 +508,10 @@ async function resolveGoogleFontURL(name) {
 }
 
 /* ─── Carica font da Google Fonts (URL dinamico) → stringa @font-face base64 ── */
-// Eccezione: 'ShadowsIntoLight' viene caricato dal TTF locale in img/
 async function loadFontAsBase64(name) {
   try {
-    let url, fmt;
-    if (name === 'Shadows Into Light') {
-      // Carica il TTF locale — stesso file usato nella preview
-      url = 'img/ShadowsIntoLight-Regular.ttf';
-      fmt = 'truetype';
-    } else {
-      url = await resolveGoogleFontURL(name);
-      fmt = url.endsWith('.ttf') ? 'truetype' : 'woff2';
-    }
+    const url = await resolveGoogleFontURL(name);
+    const fmt = url.endsWith('.ttf') ? 'truetype' : 'woff2';
     const resp = await fetch(url);
     if (!resp.ok) throw new Error(`fetch fallito per "${name}": ${resp.status}`);
     const buf   = await resp.arrayBuffer();
@@ -554,38 +546,16 @@ async function exportGIF() {
   // Ferma il RAF live
   if (stopmoRaf) { cancelAnimationFrame(stopmoRaf); stopmoRaf = null; }
 
-  // ── 1. Carica il TTF locale (Shadows Into Light) in base64 ──
-  exportStatus.textContent = 'Caricamento font locale...';
+  // ── Carica tutti i font da Google Fonts in base64 ──────────
+  exportStatus.textContent = 'Caricamento font...';
   await new Promise(r => setTimeout(r, 0));
-  let inlineFontFace = '';
-  try {
-    const resp = await fetch('img/ShadowsIntoLight-Regular.ttf');
-    if (!resp.ok) throw new Error('fetch TTF fallito: ' + resp.status);
-    const buf  = await resp.arrayBuffer();
-    const bytes = new Uint8Array(buf);
-    let bin = '';
-    const chunk = 8192;
-    for (let i = 0; i < bytes.length; i += chunk) bin += String.fromCharCode(...bytes.subarray(i, i + chunk));
-    const b64 = btoa(bin);
-    inlineFontFace = `@font-face { font-family: 'Shadows Into Light'; font-style: normal; font-weight: 400; src: url('data:font/truetype;base64,${b64}') format('truetype'); }\n`;
-  } catch(e) {
-    console.error('Font TTF load error:', e);
-    inlineFontFace = "@font-face { font-family: 'Shadows Into Light'; src: local('Shadows Into Light'); }\n";
-  }
-
-  // ── 2. Carica gli altri font da Google Fonts in base64 ───────
-  // (Shadows Into Light è già gestito sopra, lo saltiamo)
-  const otherFonts = FONT_EXPORT_NAMES.filter(n => n !== 'Shadows Into Light');
-  let inlineGFontsCSS = '';
-  for (let i = 0; i < otherFonts.length; i++) {
-    const name = otherFonts[i];
-    exportStatus.textContent = `Font ${i + 1}/${otherFonts.length}: ${name}...`;
+  let inlineFontsCSS = '';
+  for (let i = 0; i < FONT_EXPORT_NAMES.length; i++) {
+    const name = FONT_EXPORT_NAMES[i];
+    exportStatus.textContent = `Font ${i + 1}/${FONT_EXPORT_NAMES.length}: ${name}...`;
     await new Promise(r => setTimeout(r, 0));
-    inlineGFontsCSS += await loadFontAsBase64(name);
+    inlineFontsCSS += await loadFontAsBase64(name);
   }
-
-  // CSS completo dei font da iniettare nel clone
-  const inlineFontsCSS = inlineFontFace + inlineGFontsCSS;
 
   // ── Canvas di rendering ─────────────────────────────────────
   const gifCanvas = document.createElement('canvas');
@@ -632,9 +602,7 @@ async function exportGIF() {
       } catch(_) {}
     });
 
-    const localFontFace = inlineFontFace || "@font-face { font-family: 'Shadows Into Light'; src: local('Shadows Into Light'); }\n";
-    cssText = localFontFace + inlineGFontsCSS + cssText;
-    cssText += "\n* { font-family: 'Shadows Into Light', cursive !important; }\n";
+    cssText = inlineFontsCSS + cssText;
 
     const styleEl = document.createElement('style');
     styleEl.textContent = cssText;
