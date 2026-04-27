@@ -615,11 +615,22 @@ async function exportGIF() {
   }
   await loadAllFontsIntoDocument();
 
-  // ── Canvas di rendering ─────────────────────────────────────
+  // ── Canvas di rendering con supersampling 2x (anti-jaggies) ──
+  // Disegniamo a doppia risoluzione poi downscaliamo → bordi morbidi
+  const SS = 2;
+  const ssCanvas = document.createElement('canvas');
+  ssCanvas.width  = GIF_W * SS;
+  ssCanvas.height = GIF_H * SS;
+  const ssCtx = ssCanvas.getContext('2d');
+  ssCtx.imageSmoothingEnabled = true;
+  ssCtx.imageSmoothingQuality = 'high';
+
   const gifCanvas = document.createElement('canvas');
   gifCanvas.width  = GIF_W;
   gifCanvas.height = GIF_H;
   const gifCtx = gifCanvas.getContext('2d', { willReadFrequently: true });
+  gifCtx.imageSmoothingEnabled = true;
+  gifCtx.imageSmoothingQuality = 'high';
 
   // Leggi dimensioni e stile reali dal DOM
   const pw = previewWrap.offsetWidth;
@@ -628,38 +639,39 @@ async function exportGIF() {
 
   // Leggi font-size reale dal computed style del previewText
   const computedFS = parseFloat(window.getComputedStyle(previewText).fontSize); // px
-  const exportFS   = Math.round(computedFS * scale);
+  const exportFS   = Math.round(computedFS * scale * SS); // scala anche il font per il SS
 
   // Leggi colore corrente
   const textColor = currentColor;
 
   // ── Disegna un frame sul canvas ─────────────────────────────
   function drawFrame(fontStates) {
-    gifCtx.clearRect(0, 0, GIF_W, GIF_H);
-    // sfondo trasparente (già clearRect)
+    // 1) Disegna ad alta risoluzione sul canvas SS
+    ssCtx.clearRect(0, 0, GIF_W * SS, GIF_H * SS);
 
-    // Ogni lettera con il suo font
     const letters = currentText.split('');
     if (letters.length === 0) return;
 
-    // Misura la larghezza totale per centrare
-    // Prima passa: misura tutto con i font assegnati
     const metrics = letters.map((ch, idx) => {
       const fontName = fontStates[idx] || 'Shadows Into Light';
-      gifCtx.font = `400 ${exportFS}px '${fontName}', cursive`;
-      return { ch, fontName, width: gifCtx.measureText(ch).width };
+      ssCtx.font = `400 ${exportFS}px '${fontName}', cursive`;
+      return { ch, fontName, width: ssCtx.measureText(ch).width };
     });
 
     const totalWidth = metrics.reduce((s, m) => s + m.width, 0);
-    let x = (GIF_W - totalWidth) / 2;
-    const y = GIF_H / 2 + exportFS * 0.35; // baseline approssimativa
+    let x = (GIF_W * SS - totalWidth) / 2;
+    const y = (GIF_H * SS) / 2 + exportFS * 0.35;
 
-    gifCtx.fillStyle = textColor;
+    ssCtx.fillStyle = textColor;
     metrics.forEach(({ ch, fontName, width }) => {
-      gifCtx.font = `400 ${exportFS}px '${fontName}', cursive`;
-      gifCtx.fillText(ch, x, y);
+      ssCtx.font = `400 ${exportFS}px '${fontName}', cursive`;
+      ssCtx.fillText(ch, x, y);
       x += width;
     });
+
+    // 2) Downscala nel canvas finale → smoothing elimina i gradini
+    gifCtx.clearRect(0, 0, GIF_W, GIF_H);
+    gifCtx.drawImage(ssCanvas, 0, 0, GIF_W, GIF_H);
   }
 
   // ── Pre-calcola stati font per ogni frame ───────────────────
