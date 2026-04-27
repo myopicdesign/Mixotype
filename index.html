@@ -1,0 +1,908 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Handwrite Title Generator</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Caveat:wght@700&family=Covered+By+Your+Grace&family=Gochi+Hand&family=Indie+Flower&family=Just+Another+Hand&family=Kalam:wght@700&family=Patrick+Hand&family=Permanent+Marker&family=Rock+Salt&family=Shadows+Into+Light&display=swap" rel="stylesheet">
+<style>
+@font-face {
+  font-family: 'ShadowsIntoLight';
+  src: url('ShadowsIntoLight-Regular.ttf') format('truetype');
+  font-weight: normal;
+  font-style: normal;
+}
+
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  --bg: #f4f0e8;
+  --paper: #fdf8f0;
+  --ink: #1a1208;
+  --ui-bg: #ede8de;
+  --ui-border: #ccc4b0;
+  --radius: 4px;
+  --ui-font: 'ShadowsIntoLight', 'Shadows Into Light', cursive;
+}
+
+body {
+  background-color: var(--bg);
+  background-image: url('img/paper_bg.jpg');
+  background-size: cover;
+  background-position: center;
+  background-attachment: fixed;
+  font-family: var(--ui-font);
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 40px 20px;
+  color: var(--ink);
+}
+
+body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  background: rgba(244, 240, 232, 0.60);
+  pointer-events: none;
+  z-index: 0;
+}
+
+body > * { position: relative; z-index: 1; }
+
+.site-logo {
+  margin-bottom: 40px;
+  display: block;
+}
+.site-logo img {
+  max-height: 60px;
+  width: auto;
+  display: block;
+}
+
+/* PREVIEW AREA */
+.preview-wrap {
+  width: 500px;
+  height: 180px;
+  flex-shrink: 0;
+  flex-grow: 0;
+  margin-bottom: 30px;
+  position: relative;
+}
+
+#preview-text {
+  font-family: 'Shadows Into Light', cursive;
+  font-weight: 400;
+  font-size: 5rem;
+  color: var(--ink);
+  line-height: 1;
+  text-align: center;
+  position: absolute !important;
+  top: 50%;
+  left: 0;
+  width: 100%;
+  transform: translateY(-50%);
+  z-index: 1;
+  user-select: none;
+  white-space: nowrap;
+}
+
+/* ===== STOP MOTION ===== */
+#preview-text .sm-static { display: block; }
+
+.anim-stopmo #preview-text .sm-static {
+  display: flex;
+  justify-content: center;
+  align-items: baseline;
+  flex-wrap: nowrap;
+}
+.anim-stopmo #preview-text .sm-static .sm-letter {
+  display: inline-block;
+  white-space: pre;
+}
+
+/* ===== CONTROLS ===== */
+.controls {
+  width: 500px;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.input-row { display: flex; gap: 10px; align-items: center; }
+
+#text-input {
+  flex: 1;
+  font-family: 'Shadows Into Light', cursive;
+  font-weight: 400;
+  font-size: 1.8rem;
+  background: var(--paper);
+  border: 1px solid var(--ui-border);
+  border-radius: var(--radius);
+  padding: 10px 16px;
+  color: var(--ink);
+  outline: none;
+  transition: border-color 0.2s;
+}
+#text-input:focus { border-color: var(--ink); }
+
+.size-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-size: 1rem;
+  
+  letter-spacing: 0.05em;
+}
+
+input[type="range"] {
+  -webkit-appearance: none;
+  width: 160px; height: 3px;
+  background: var(--ui-border);
+  border-radius: 2px;
+  outline: none;
+}
+input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 14px; height: 14px;
+  border-radius: 50%;
+  background: var(--ink);
+  cursor: pointer;
+}
+
+.anim-buttons { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+
+.anim-btn {
+  padding: 10px 22px;
+  border: 1.5px solid var(--ui-border);
+  background: var(--ui-bg);
+  border-radius: var(--radius);
+  font-family: var(--ui-font);
+  font-size: 1rem;
+  
+  letter-spacing: 0.05em;
+  cursor: pointer;
+  color: var(--ink);
+  transition: all 0.15s;
+}
+.anim-btn:hover { background: var(--ink); color: var(--bg); border-color: var(--ink); }
+.anim-btn.active { background: var(--ink); color: var(--bg); border-color: var(--ink); }
+
+.stop-btn {
+  padding: 10px 22px;
+  border: 1.5px solid var(--ui-border);
+  background: transparent;
+  border-radius: var(--radius);
+  font-family: var(--ui-font);
+  font-size: 1rem;
+  
+  letter-spacing: 0.05em;
+  cursor: pointer;
+  color: #222222;
+}
+.stop-btn:hover { border-color: #222222; }
+
+.row-label {
+  font-size: 0.95rem;
+  
+  letter-spacing: 0.05em;
+  color: #222222;
+  min-width: 70px;
+}
+
+.color-row { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+
+.color-swatch {
+  width: 24px; height: 24px;
+  border-radius: 50%;
+  cursor: pointer;
+  border: 2px solid transparent;
+  transition: border-color 0.15s, transform 0.15s;
+}
+.color-swatch:hover, .color-swatch.active {
+  border-color: var(--ink);
+  transform: scale(1.15);
+}
+
+.intensity-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-size: 1rem;
+  
+  letter-spacing: 0.05em;
+  visibility: hidden;
+  pointer-events: none;
+}
+.intensity-row.visible { visibility: visible; pointer-events: auto; }
+
+.divider { width: 100%; height: 1px; background: var(--ui-border); }
+
+/* EXPORT BUTTON */
+.export-row {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+}
+
+#export-btn {
+  padding: 12px 32px;
+  border: 2px solid #222222;
+  background: transparent;
+  color: #222222;
+  border-radius: var(--radius);
+  font-family: var(--ui-font);
+  font-size: 1.1rem;
+  letter-spacing: 0.05em;
+  cursor: pointer;
+  transition: all 0.15s;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+#export-btn:hover { background: #222222; color: #ffffff; }
+#export-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+
+#export-status {
+  font-size: 0.68rem;
+  color: #222222;
+  letter-spacing: 0.1em;
+}
+
+.progress-bar-wrap {
+  width: 160px;
+  height: 3px;
+  background: var(--ui-border);
+  border-radius: 2px;
+  overflow: hidden;
+  display: none;
+}
+.progress-bar-wrap.visible { display: block; }
+#progress-bar {
+  height: 100%;
+  width: 0%;
+  background: var(--ink);
+  transition: width 0.1s linear;
+}
+</style>
+</head>
+<body>
+
+<a class="site-logo" href="#">
+  <img src="img/mixotypelogo.png" alt="Mixotype logo">
+</a>
+
+<div class="preview-wrap" id="preview-wrap">
+  <span id="preview-text" data-text="Titolo">
+    <span class="sm-static">Titolo</span>
+  </span>
+</div>
+
+<div class="controls">
+
+  <div class="input-row">
+    <input type="text" id="text-input" value="Titolo" maxlength="30" placeholder="Scrivi qui...">
+  </div>
+
+  <div class="size-row">
+    <span class="row-label">Dimensione</span>
+    <input type="range" id="size-slider" min="2" max="12" value="5" step="0.5">
+    <span id="size-val">5rem</span>
+  </div>
+
+  <div class="color-row">
+    <span class="row-label">Colore</span>
+    <span class="color-swatch active" data-color="#1a1208" style="background:#1a1208"></span>
+    <span class="color-swatch" data-color="#ffffff" style="background:#ffffff; border-color:var(--ui-border)"></span>
+    <input type="color" id="custom-color" value="#1a1208" title="Colore personalizzato"
+      style="width:24px;height:24px;border:none;border-radius:50%;cursor:pointer;padding:0;background:none;">
+  </div>
+
+  <div class="divider"></div>
+
+  <div class="anim-buttons">
+    <span class="row-label" style="align-self:center">Animazione</span>
+    <button class="anim-btn" data-anim="stopmo">◈ Stop Motion</button>
+    <button class="stop-btn" id="stop-btn">Stop</button>
+  </div>
+
+  <div class="intensity-row" id="intensity-row">
+    <span class="row-label">Intensità</span>
+    <input type="range" id="intensity-slider" min="0.1" max="3" value="1" step="0.05">
+    <span id="intensity-val">1×</span>
+  </div>
+
+  <div class="divider"></div>
+
+  <div class="export-row">
+    <button id="export-btn">⬇ Esporta GIF</button>
+    <div class="progress-bar-wrap" id="progress-wrap">
+      <div id="progress-bar"></div>
+    </div>
+    <span id="export-status"></span>
+  </div>
+
+</div>
+
+<script>
+const previewText     = document.getElementById('preview-text');
+const previewWrap     = document.getElementById('preview-wrap');
+const textInput       = document.getElementById('text-input');
+const sizeSlider      = document.getElementById('size-slider');
+const sizeVal         = document.getElementById('size-val');
+const animBtns        = document.querySelectorAll('.anim-btn');
+const stopBtn         = document.getElementById('stop-btn');
+const swatches        = document.querySelectorAll('.color-swatch');
+const customColor     = document.getElementById('custom-color');
+const intensitySlider = document.getElementById('intensity-slider');
+const intensityVal    = document.getElementById('intensity-val');
+const intensityRow    = document.getElementById('intensity-row');
+const exportBtn       = document.getElementById('export-btn');
+const exportStatus    = document.getElementById('export-status');
+const progressWrap    = document.getElementById('progress-wrap');
+const progressBar     = document.getElementById('progress-bar');
+
+let currentAnim      = null;
+let currentColor     = '#1a1208';
+let currentIntensity = 1;
+let currentFontSize  = 5;
+let currentText      = 'Titolo';
+
+// Font usati nello stop motion
+const STOPMO_FONTS = [
+  'Shadows Into Light','Caveat','Covered By Your Grace','Gochi Hand',
+  'Indie Flower','Just Another Hand','Kalam','Patrick Hand','Permanent Marker','Rock Salt',
+];
+
+// Nomi dei font usati nell'export — gli URL woff2 vengono risolti dinamicamente
+// chiamando la Google Fonts CSS API, così sono sempre aggiornati.
+const FONT_EXPORT_NAMES = [
+  'Shadows Into Light','Caveat','Covered By Your Grace','Gochi Hand',
+  'Indie Flower','Just Another Hand','Kalam','Patrick Hand','Permanent Marker','Rock Salt',
+];
+
+let stopmoRaf = null, stopmoFrame = 0, stopmoInterval = 6;
+
+function pickFont(exclude) {
+  let f;
+  do { f = STOPMO_FONTS[Math.floor(Math.random() * STOPMO_FONTS.length)]; }
+  while (f === exclude && STOPMO_FONTS.length > 1);
+  return f;
+}
+
+function buildLetterSpans(text) {
+  const staticSpan = previewText.querySelector('.sm-static');
+  staticSpan.innerHTML = '';
+  text.split('').forEach(ch => {
+    const s = document.createElement('span');
+    s.className = 'sm-letter';
+    s.textContent = ch;
+    s.dataset.currentFont = 'Shadows Into Light';
+    s.style.fontFamily = "'Shadows Into Light', cursive";
+    staticSpan.appendChild(s);
+  });
+}
+
+function tickStopmo() {
+  stopmoFrame++;
+  if (stopmoFrame % stopmoInterval === 0) {
+    previewText.querySelectorAll('.sm-letter').forEach(ltr => {
+      if (Math.random() < 0.6) {
+        const next = pickFont(ltr.dataset.currentFont);
+        ltr.dataset.currentFont = next;
+        ltr.style.fontFamily = `'${next}', cursive`;
+      }
+    });
+  }
+  stopmoRaf = requestAnimationFrame(tickStopmo);
+}
+
+function startStopmo(intensity) {
+  stopmoInterval = Math.max(2, Math.round(10 / intensity));
+  stopmoFrame = 0;
+  if (!stopmoRaf) tickStopmo();
+}
+
+function stopStopmo() {
+  if (stopmoRaf) { cancelAnimationFrame(stopmoRaf); stopmoRaf = null; }
+  const staticSpan = previewText.querySelector('.sm-static');
+  staticSpan.querySelectorAll('.sm-letter').forEach(ltr => {
+    ltr.style.fontFamily = "'Shadows Into Light', cursive";
+    ltr.dataset.currentFont = 'Shadows Into Light';
+  });
+}
+
+function updateText(val) {
+  currentText = val || ' ';
+  previewText.setAttribute('data-text', currentText);
+  if (currentAnim === 'stopmo') {
+    stopStopmo(); buildLetterSpans(currentText); startStopmo(currentIntensity);
+  } else {
+    previewText.querySelector('.sm-static').textContent = currentText;
+  }
+}
+
+function setAnim(anim) {
+  previewWrap.classList.remove('anim-stopmo');
+  stopStopmo();
+  previewText.querySelector('.sm-static').textContent = currentText;
+  if (anim) {
+    previewWrap.classList.add('anim-' + anim);
+    if (anim === 'stopmo') { buildLetterSpans(currentText); startStopmo(currentIntensity); }
+    intensityRow.classList.add('visible');
+  } else {
+    intensityRow.classList.remove('visible');
+  }
+  currentAnim = anim;
+  animBtns.forEach(b => b.classList.toggle('active', b.dataset.anim === anim));
+}
+
+function setIntensity(t) {
+  currentIntensity = t;
+  intensityVal.textContent = t.toFixed(1) + '×';
+  if (!currentAnim) return;
+  if (currentAnim === 'stopmo') stopmoInterval = Math.max(2, Math.round(10 / t));
+}
+
+function setColor(color) {
+  currentColor = color;
+  previewText.style.color = color;
+  swatches.forEach(s => s.classList.toggle('active', s.dataset.color === color));
+}
+
+textInput.addEventListener('input', () => updateText(textInput.value));
+sizeSlider.addEventListener('input', () => {
+  currentFontSize = parseFloat(sizeSlider.value);
+  previewText.style.fontSize = currentFontSize + 'rem';
+  sizeVal.textContent = currentFontSize + 'rem';
+});
+intensitySlider.addEventListener('input', () => setIntensity(parseFloat(intensitySlider.value)));
+animBtns.forEach(btn => btn.addEventListener('click', () => setAnim(btn.dataset.anim)));
+stopBtn.addEventListener('click', () => setAnim(null));
+swatches.forEach(s => s.addEventListener('click', () => setColor(s.dataset.color)));
+customColor.addEventListener('input', () => setColor(customColor.value));
+
+updateText('Titolo');
+
+/* ============================================================
+   EXPORT – GIF animata con alpha
+   ============================================================ */
+
+exportBtn.addEventListener('click', startExport);
+
+async function startExport() {
+  if (!currentAnim) { exportStatus.textContent = "Attiva prima un'animazione!"; return; }
+  exportBtn.disabled = true;
+  progressWrap.classList.add('visible');
+  progressBar.style.width = '0%';
+  exportStatus.textContent = 'Preparazione...';
+  try {
+    await exportGIF();
+  } catch(e) {
+    exportStatus.textContent = '✗ Errore: ' + e.message;
+    exportBtn.disabled = false;
+    progressWrap.classList.remove('visible');
+    console.error(e);
+  }
+}
+
+/* ─── Risolve URL woff2 reale tramite Google Fonts CSS API ─────────── */
+// Chiama l'endpoint CSS2 con un User-Agent da browser moderno così Google
+// risponde con woff2 (il formato più compatto). Estrae il primo url(...) dalla risposta.
+async function resolveGoogleFontURL(name) {
+  const family = name.replace(/ /g, '+');
+  const cssURL = `https://fonts.googleapis.com/css2?family=${family}&display=swap`;
+  const resp = await fetch(cssURL, {
+    headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/124 Safari/537.36' }
+  });
+  if (!resp.ok) throw new Error(`CSS API fail per "${name}": ${resp.status}`);
+  const css = await resp.text();
+  // Estrae il primo url(https://...) presente nella risposta CSS
+  const match = css.match(/url\((https:\/\/fonts\.gstatic\.com\/[^)]+)\)/);
+  if (!match) throw new Error(`URL non trovato nella risposta CSS per "${name}"`);
+  return match[1];
+}
+
+/* ─── Carica font da Google Fonts (URL dinamico) → stringa @font-face base64 ── */
+async function loadFontAsBase64(name) {
+  try {
+    const url  = await resolveGoogleFontURL(name);
+    const resp = await fetch(url);
+    if (!resp.ok) throw new Error(`fetch woff2 fallito per "${name}": ${resp.status}`);
+    const buf   = await resp.arrayBuffer();
+    const bytes = new Uint8Array(buf);
+    // Conversione ArrayBuffer → base64 senza stringa concatenata (più veloce)
+    let bin = '';
+    const chunk = 8192;
+    for (let i = 0; i < bytes.length; i += chunk) {
+      bin += String.fromCharCode(...bytes.subarray(i, i + chunk));
+    }
+    const b64 = btoa(bin);
+    const fmt  = url.endsWith('.ttf') ? 'truetype' : 'woff2';
+    return `@font-face { font-family: '${name}'; font-style: normal; font-weight: 400; src: url('data:font/${fmt};base64,${b64}') format('${fmt}'); }\n`;
+  } catch(e) {
+    console.warn('Font load fallback per', name, e);
+    return `@font-face { font-family: '${name}'; src: local('${name}'); }\n`;
+  }
+}
+
+/* ─── GIF ANIMATA – cattura DOM reale con font inline ──────── */
+async function exportGIF() {
+  const GIF_W   = 1000;
+  const GIF_H   = 400;
+  const GIF_FPS = 15;
+  const GIF_DUR = 4;
+
+  const totalFrames  = GIF_FPS * GIF_DUR;
+  const frameDelayCs = Math.round(100 / GIF_FPS);
+  const frameDurMs   = 1000 / GIF_FPS;
+
+  const staticSpan = previewText.querySelector('.sm-static');
+  const prevWrapBg = previewWrap.style.background;
+
+  // Ferma il RAF live
+  if (stopmoRaf) { cancelAnimationFrame(stopmoRaf); stopmoRaf = null; }
+
+  // ── Carica tutti i font in base64 ──────────────────────────
+  // Il SVG foreignObject non può caricare link esterni: ogni @font-face
+  // deve essere embeddato inline come data URI, esattamente come fa
+  // il tool con il font locale TTF.
+  exportStatus.textContent = 'Caricamento font...';
+  await new Promise(r => setTimeout(r, 0));
+
+  let inlineFontsCSS = '';
+  for (let i = 0; i < FONT_EXPORT_NAMES.length; i++) {
+    const name = FONT_EXPORT_NAMES[i];
+    exportStatus.textContent = `Font ${i + 1}/${FONT_EXPORT_NAMES.length}: ${name}...`;
+    await new Promise(r => setTimeout(r, 0));
+    inlineFontsCSS += await loadFontAsBase64(name);
+  }
+
+  // ── Canvas di rendering ─────────────────────────────────────
+  const gifCanvas = document.createElement('canvas');
+  gifCanvas.width  = GIF_W;
+  gifCanvas.height = GIF_H;
+  const gifCtx = gifCanvas.getContext('2d');
+
+  const pw    = previewWrap.offsetWidth;
+  const ph    = previewWrap.offsetHeight;
+  const scale = GIF_W / pw;
+
+  previewWrap.style.background = 'transparent';
+
+  // ── Serializza DOM → SVG foreignObject con font inline ──────
+  function serializeNodeToDataURL(node, w, h) {
+    const clone = node.cloneNode(true);
+
+    function inlineStyles(src, dst) {
+      const cs = window.getComputedStyle(src);
+      const props = [
+        'font-family','font-size','font-weight','font-style',
+        'color','text-align','line-height','white-space',
+        'position','top','left','width','height','transform',
+        'display','flex-direction','justify-content','align-items',
+        'flex-wrap','filter','user-select','overflow','box-sizing','letter-spacing',
+      ];
+      props.forEach(p => {
+        try { dst.style[p] = cs.getPropertyValue(p); } catch(_) {}
+      });
+      const srcCh = src.children;
+      const dstCh = dst.children;
+      for (let i = 0; i < srcCh.length; i++) {
+        if (dstCh[i]) inlineStyles(srcCh[i], dstCh[i]);
+      }
+    }
+    inlineStyles(node, clone);
+
+    // Raccoglie CSS della pagina
+    const styleSheets = Array.from(document.styleSheets);
+    let cssText = '';
+    styleSheets.forEach(ss => {
+      try {
+        Array.from(ss.cssRules || []).forEach(r => { cssText += r.cssText + '\n'; });
+      } catch(_) {}
+    });
+
+    // *** IL FIX CHIAVE: antepone tutti i @font-face con data URI base64 ***
+    // I font-family inline su ogni .sm-letter vengono rispettati (non sovrascrittiamo
+    // con !important globale) così ogni lettera mantiene il suo font stop-motion.
+    cssText = inlineFontsCSS + cssText;
+
+    const styleEl = document.createElement('style');
+    styleEl.textContent = cssText;
+
+    const wrapper = document.createElement('div');
+    wrapper.style.width    = w + 'px';
+    wrapper.style.height   = h + 'px';
+    wrapper.style.overflow = 'hidden';
+    wrapper.appendChild(styleEl);
+    wrapper.appendChild(clone);
+
+    const xml    = new XMLSerializer().serializeToString(wrapper);
+    const svgSrc = `<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${h}">
+      <foreignObject width="100%" height="100%">
+        <html xmlns="http://www.w3.org/1999/xhtml">${xml}</html>
+      </foreignObject>
+    </svg>`;
+    return 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svgSrc);
+  }
+
+  function captureFrame() {
+    return new Promise((resolve) => {
+      const dataURL = serializeNodeToDataURL(previewWrap, pw, ph);
+      const img = new Image();
+      img.onload = () => {
+        gifCtx.clearRect(0, 0, GIF_W, GIF_H);
+        const drawH = ph * scale;
+        const drawY = Math.round((GIF_H - drawH) / 2);
+        gifCtx.drawImage(img, 0, drawY, GIF_W, drawH);
+        resolve(gifCtx.getImageData(0, 0, GIF_W, GIF_H));
+      };
+      img.onerror = () => {
+        gifCtx.clearRect(0, 0, GIF_W, GIF_H);
+        resolve(gifCtx.getImageData(0, 0, GIF_W, GIF_H));
+      };
+      img.src = dataURL;
+    });
+  }
+
+  // ── Pre-calcola stati font per ogni frame (determinismo stop motion) ──
+  // Simula la stessa logica rAF del live così l'export corrisponde all'anteprima
+  const stopmoStates = [];
+  {
+    const letters  = currentText.split('');
+    let fontState  = letters.map(() => 'Shadows Into Light');
+    let localFrame = 0;
+    for (let i = 0; i < totalFrames; i++) {
+      const rafThisFrame = Math.round((i + 1) * 1000 / GIF_FPS / (1000 / 60))
+                         - Math.round(i       * 1000 / GIF_FPS / (1000 / 60));
+      for (let t = 0; t < rafThisFrame; t++) {
+        localFrame++;
+        if (localFrame % stopmoInterval === 0) {
+          fontState = fontState.map(f => {
+            if (Math.random() < 0.6) {
+              let next;
+              do { next = STOPMO_FONTS[Math.floor(Math.random() * STOPMO_FONTS.length)]; }
+              while (next === f && STOPMO_FONTS.length > 1);
+              return next;
+            }
+            return f;
+          });
+        }
+      }
+      stopmoStates.push([...fontState]);
+    }
+  }
+
+  exportStatus.textContent = 'Rendering frame GIF...';
+  await new Promise(r => setTimeout(r, 0));
+
+  const frames = [];
+
+  for (let i = 0; i < totalFrames; i++) {
+    // Applica lo stato font calcolato a ogni .sm-letter nel DOM reale
+    const letterSpans = staticSpan.querySelectorAll('.sm-letter');
+    const state = stopmoStates[i];
+    letterSpans.forEach((s, idx) => {
+      if (state[idx]) {
+        s.style.fontFamily     = `'${state[idx]}', cursive`;
+        s.dataset.currentFont  = state[idx];
+      }
+    });
+
+    // Forza reflow + doppio rAF per garantire paint aggiornato
+    previewWrap.getBoundingClientRect();
+    await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));
+
+    frames.push(await captureFrame());
+
+    progressBar.style.width = ((i / totalFrames) * 55).toFixed(1) + '%';
+    exportStatus.textContent = `Cattura frame ${i + 1}/${totalFrames}...`;
+  }
+
+  // Ripristina
+  previewWrap.style.background = prevWrapBg;
+  startStopmo(currentIntensity);
+
+  exportStatus.textContent = 'Costruzione palette...';
+  progressBar.style.width = '55%';
+  await new Promise(r => setTimeout(r, 0));
+
+  const palette = buildFastPalette(frames, GIF_W, GIF_H, 255);
+  const TRANSPARENT_IDX = 255;
+
+  exportStatus.textContent = 'Encoding GIF...';
+  progressBar.style.width = '60%';
+  await new Promise(r => setTimeout(r, 0));
+
+  let gifBytes;
+  try {
+    gifBytes = await encodeGIF(frames, palette, TRANSPARENT_IDX, frameDelayCs, GIF_W, GIF_H);
+  } catch(e) {
+    exportStatus.textContent = '✗ Encoding fallito: ' + e.message;
+    exportBtn.disabled = false;
+    progressWrap.classList.remove('visible');
+    console.error(e);
+    return;
+  }
+
+  progressBar.style.width = '100%';
+
+  const blob = new Blob([gifBytes], { type: 'image/gif' });
+  const url  = URL.createObjectURL(blob);
+  const a    = document.createElement('a');
+  a.href     = url;
+  a.download = `handwrite_${currentText.trim() || 'titolo'}_alpha.gif`;
+  a.click();
+  URL.revokeObjectURL(url);
+
+  exportBtn.disabled = false;
+  progressWrap.classList.remove('visible');
+  exportStatus.textContent = '✓ GIF esportata!';
+  setTimeout(() => exportStatus.textContent = '', 5000);
+}
+
+/* ─── Palette veloce ───────────────────────────────────────── */
+function buildFastPalette(frames, w, h, maxColors) {
+  const buckets = {};
+  const step = 8;
+  for (const f of frames) {
+    const d = f.data;
+    for (let p = 0; p < d.length; p += 16) {
+      if (d[p+3] < 128) continue;
+      const r = d[p]   & ~(step-1);
+      const g = d[p+1] & ~(step-1);
+      const b = d[p+2] & ~(step-1);
+      const key = (r << 16) | (g << 8) | b;
+      buckets[key] = (buckets[key] || 0) + 1;
+    }
+  }
+  const sorted = Object.entries(buckets)
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, maxColors)
+    .map(([key]) => { const k = parseInt(key); return [(k >> 16) & 0xFF, (k >> 8) & 0xFF, k & 0xFF]; });
+  while (sorted.length < 256) sorted.push([0, 0, 0]);
+  return sorted;
+}
+
+/* ─── GIF encoder ──────────────────────────────────────────── */
+async function encodeGIF(frames, palette, transparentIdx, frameDelayCs, w, h) {
+  const out = [];
+  const byte = v => out.push(v & 0xFF);
+  const word = v => { out.push(v & 0xFF); out.push((v >> 8) & 0xFF); };
+  const str  = s => { for (let i = 0; i < s.length; i++) out.push(s.charCodeAt(i)); };
+
+  str('GIF89a'); word(w); word(h);
+  byte(0b11110111); byte(0); byte(0);
+
+  for (let i = 0; i < 256; i++) {
+    const c = palette[i] || [0,0,0];
+    byte(c[0]); byte(c[1]); byte(c[2]);
+  }
+
+  byte(0x21); byte(0xFF); byte(0x0B);
+  str('NETSCAPE2.0');
+  byte(3); byte(1); word(0); byte(0);
+
+  const lut = new Uint8Array(32 * 32 * 32).fill(0);
+  for (let pi = 0; pi < 255; pi++) {
+    const [pr, pg, pb] = palette[pi];
+    const ri = Math.round(pr / 8), gi = Math.round(pg / 8), bi = Math.round(pb / 8);
+    const idx = (Math.min(ri,31) << 10) | (Math.min(gi,31) << 5) | Math.min(bi,31);
+    if (lut[idx] === 0 && pi !== 0) lut[idx] = pi;
+  }
+  for (let r = 0; r < 32; r++) for (let g = 0; g < 32; g++) for (let b = 0; b < 32; b++) {
+    const idx = (r << 10) | (g << 5) | b;
+    if (lut[idx] === 0) {
+      let best = 0, bestD = Infinity;
+      for (let pi = 0; pi < 255; pi++) {
+        const [pr, pg, pb] = palette[pi];
+        const d = (r*8-pr)**2 + (g*8-pg)**2 + (b*8-pb)**2;
+        if (d < bestD) { bestD = d; best = pi; }
+      }
+      lut[idx] = best;
+    }
+  }
+
+  for (let fi = 0; fi < frames.length; fi++) {
+    if (fi % 4 === 0) {
+      progressBar.style.width = (45 + (fi / frames.length) * 50).toFixed(1) + '%';
+      exportStatus.textContent = `Encoding frame ${fi+1}/${frames.length}...`;
+      await new Promise(r => setTimeout(r, 0));
+    }
+    const d = frames[fi].data;
+    byte(0x21); byte(0xF9); byte(4);
+    byte(0b00001101); word(frameDelayCs); byte(transparentIdx); byte(0);
+    byte(0x2C); word(0); word(0); word(w); word(h); byte(0);
+
+    const indices = new Uint8Array(w * h);
+    for (let p = 0; p < w * h; p++) {
+      const o = p * 4;
+      if (d[o+3] < 128) {
+        indices[p] = transparentIdx;
+      } else {
+        const ri = Math.min(d[o]   >> 3, 31);
+        const gi = Math.min(d[o+1] >> 3, 31);
+        const bi = Math.min(d[o+2] >> 3, 31);
+        indices[p] = lut[(ri << 10) | (gi << 5) | bi];
+      }
+    }
+
+    const lzwMin = 8;
+    const compressed = lzwEncode(indices, lzwMin);
+    byte(lzwMin);
+    let ci = 0;
+    while (ci < compressed.length) {
+      const bs = Math.min(255, compressed.length - ci);
+      byte(bs);
+      for (let bi2 = 0; bi2 < bs; bi2++) byte(compressed[ci++]);
+    }
+    byte(0);
+  }
+  byte(0x3B);
+  return new Uint8Array(out);
+}
+
+/* ─── LZW encoder ─────────────────────────────────────────── */
+function lzwEncode(indices, minCodeSize) {
+  const clearCode = 1 << minCodeSize;
+  const eofCode   = clearCode + 1;
+  let codeSize    = minCodeSize + 1;
+  let nextCode    = eofCode + 1;
+  const output = []; let curByte = 0, curBits = 0;
+
+  function emitCode(code) {
+    curByte |= code << curBits; curBits += codeSize;
+    while (curBits >= 8) { output.push(curByte & 0xFF); curByte >>= 8; curBits -= 8; }
+  }
+
+  const HASH_SIZE = 16384, HASH_MASK = HASH_SIZE - 1;
+  const hashKeys  = new Int32Array(HASH_SIZE).fill(-1);
+  const hashVals  = new Int32Array(HASH_SIZE);
+
+  function resetTable() { hashKeys.fill(-1); codeSize = minCodeSize + 1; nextCode = eofCode + 1; }
+
+  function hashLookup(prefix, pixel) {
+    const key = (prefix << 8) | pixel;
+    let slot = (key * 2654435761) & HASH_MASK;
+    while (true) {
+      const k = hashKeys[slot];
+      if (k === -1) return ~slot;
+      if (k === key) return slot;
+      slot = (slot + 1) & HASH_MASK;
+    }
+  }
+
+  function tableSet(prefix, pixel, code) {
+    const key = (prefix << 8) | pixel;
+    let slot = (key * 2654435761) & HASH_MASK;
+    while (hashKeys[slot] !== -1) slot = (slot + 1) & HASH_MASK;
+    hashKeys[slot] = key; hashVals[slot] = code;
+  }
+
+  resetTable(); emitCode(clearCode);
+  let prefixCode = indices[0];
+  for (let i = 1; i < indices.length; i++) {
+    const pixel = indices[i];
+    const slot  = hashLookup(prefixCode, pixel);
+    if (slot >= 0) {
+      prefixCode = hashVals[slot];
+    } else {
+      emitCode(prefixCode);
+      if (nextCode < 4096) { tableSet(prefixCode, pixel, nextCode++); if (nextCode > (1 << codeSize)) codeSize++; }
+      else { emitCode(clearCode); resetTable(); }
+      prefixCode = pixel;
+    }
+  }
+  emitCode(prefixCode); emitCode(eofCode);
+  if (curBits > 0) output.push(curByte & 0xFF);
+  return output;
+}
+</script>
+</body>
+</html>
