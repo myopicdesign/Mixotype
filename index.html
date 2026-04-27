@@ -511,63 +511,34 @@ async function resolveGoogleFontURL(name) {
 // Shadows Into Light: caricato dal TTF locale (identico alla preview)
 // Tutti gli altri: risolti dinamicamente da Google Fonts API
 async function loadFontAsBase64(name) {
-  try {
-    let url, fmt;
-    if (name === 'Shadows Into Light') {
-      fmt = 'truetype';
-      // Prova diversi path possibili per il TTF locale
-      const candidates = [
-        'img/ShadowsIntoLight-Regular.ttf',
-        './img/ShadowsIntoLight-Regular.ttf',
-        window.location.href.replace(/\/[^\/]*$/, '/') + 'img/ShadowsIntoLight-Regular.ttf',
-      ];
-      let buf = null;
-      for (const candidate of candidates) {
-        try {
-          const r = await fetch(candidate);
-          if (r.ok) {
-            const b = await r.arrayBuffer();
-            if (b.byteLength > 0) { buf = b; break; }
-          }
-        } catch(_) {}
-      }
-      if (!buf) {
-        // Ultimo tentativo: leggi il font già caricato dal documento via FontFace API
-        const loaded = [...(document.fonts || [])].find(f => f.family === 'Shadows Into Light');
-        if (loaded) {
-          console.warn('Shadows Into Light: TTF locale non raggiungibile, uso local()');
-          return `@font-face { font-family: 'Shadows Into Light'; font-style: normal; font-weight: 400; src: local('Shadows Into Light'), local('ShadowsIntoLight-Regular'); }\n`;
-        }
-        throw new Error('TTF locale non trovato in nessun path');
-      }
-      const bytes = new Uint8Array(buf);
-      let bin = '';
-      const chunk = 8192;
-      for (let i = 0; i < bytes.length; i += chunk) {
-        bin += String.fromCharCode(...bytes.subarray(i, i + chunk));
-      }
-      const b64 = btoa(bin);
-      return `@font-face { font-family: '${name}'; font-style: normal; font-weight: 400; src: url('data:font/${fmt};base64,${b64}') format('${fmt}'); }\n`;
-    } else {
+  let url, fmt;
+
+  if (name === 'Shadows Into Light') {
+    url = 'img/ShadowsIntoLight-Regular.ttf';
+    fmt = 'truetype';
+  } else {
+    try {
       url = await resolveGoogleFontURL(name);
-      fmt = url.endsWith('.ttf') ? 'truetype' : 'woff2';
+    } catch(e) {
+      console.warn(`resolveGoogleFontURL fallito per "${name}":`, e);
+      return `@font-face { font-family: '${name}'; src: local('${name}'); }\n`;
     }
-    const resp = await fetch(url);
-    if (!resp.ok) throw new Error(`fetch fallito per "${name}": ${resp.status}`);
-    const buf   = await resp.arrayBuffer();
-    if (buf.byteLength === 0) throw new Error(`TTF vuoto per "${name}"`);
-    const bytes = new Uint8Array(buf);
-    let bin = '';
-    const chunk = 8192;
-    for (let i = 0; i < bytes.length; i += chunk) {
-      bin += String.fromCharCode(...bytes.subarray(i, i + chunk));
-    }
-    const b64 = btoa(bin);
-    return `@font-face { font-family: '${name}'; font-style: normal; font-weight: 400; src: url('data:font/${fmt};base64,${b64}') format('${fmt}'); }\n`;
-  } catch(e) {
-    console.warn('Font load fallback per', name, e);
-    return `@font-face { font-family: '${name}'; src: local('${name}'); }\n`;
+    fmt = url.endsWith('.ttf') ? 'truetype' : 'woff2';
   }
+
+  const resp = await fetch(url);
+  if (!resp.ok) throw new Error(`fetch fallito per "${name}" (${url}): HTTP ${resp.status}`);
+  const buf = await resp.arrayBuffer();
+  if (buf.byteLength === 0) throw new Error(`Font vuoto per "${name}"`);
+
+  const bytes = new Uint8Array(buf);
+  let bin = '';
+  const chunk = 8192;
+  for (let i = 0; i < bytes.length; i += chunk) {
+    bin += String.fromCharCode(...bytes.subarray(i, i + chunk));
+  }
+  const b64 = btoa(bin);
+  return `@font-face { font-family: '${name}'; font-style: normal; font-weight: 400; src: url('data:font/${fmt};base64,${b64}') format('${fmt}'); }\n`;
 }
 
 /* ─── GIF ANIMATA – cattura DOM reale con font inline ──────── */
